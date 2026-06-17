@@ -61,6 +61,32 @@ The API requires Bearer token authentication for most endpoints.
 2. Obtain the access token from the response
 3. Include the token in the Authorization header as `Bearer <token>` for subsequent requests
 
+## Logout and Token Management
+
+**Why is there no logout endpoint?**
+
+This implementation uses stateless token-based authentication. The server does not maintain any session state, meaning the token is valid until it expires or is no longer used by the client.
+
+**How logout works in production token-based systems:**
+
+1. **Client-side logout**: The client simply discards the token from local storage or memory. No server request is needed.
+
+2. **Token expiration**: Tokens should have a short expiration time (e.g., 15-30 minutes). Users need to re-authenticate to get a new token.
+
+3. **Token blacklisting**: For real logout functionality, a production system would:
+   - Maintain a database of invalidated tokens
+   - Check against this blacklist during token verification
+   - Add tokens to the blacklist when a logout request is made
+
+4. **Refresh tokens**: Use a two-token system:
+   - Short-lived access tokens (for API requests)
+   - Long-lived refresh tokens (to obtain new access tokens)
+   - Logout invalidates the refresh token, preventing new access tokens from being issued
+
+5. **Revocation list (Redis/Cache)**: Store invalidated tokens in a fast cache like Redis with TTL matching the token expiration time.
+
+For this simple demonstration, client-side logout (discarding the token) is sufficient.
+
 ## API Endpoints
 
 - `GET /` - Welcome message
