@@ -18,22 +18,33 @@ next_id = 1
 VALID_USERNAME = "admin" 
 VALID_PASSWORD = "clinic123" 
 VALID_TOKEN = "clinic-secret-token" 
+
+
+# CHALLENGE 1
+STAFF_USERNAME = "staff"
+STAFF_PASSWORD = "staff123"
+STAFF_TOKEN = "staffsecrettoken"
   
   
-def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)): 
-    token = credentials.credentials 
-  
-    if not compare_digest(token, VALID_TOKEN): 
-        raise HTTPException( 
-            status_code=status.HTTP_401_UNAUTHORIZED, 
-            detail="Invalid or expired token" 
-        ) 
-  
-    return { 
-        "username": VALID_USERNAME, 
-        "role": "clinic_staff" 
-    } 
-  
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+
+    if compare_digest(token, VALID_TOKEN):
+        return {
+            "username": VALID_USERNAME,
+            "role": "clinic_staff"
+        }
+
+    if compare_digest(token, STAFF_TOKEN):
+        return {
+            "username": STAFF_USERNAME,
+            "role": "clinic_assistant"
+        }
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired token"
+    )
   
 @app.get("/") 
 def read_root(): 
@@ -45,21 +56,21 @@ def read_root():
     } 
   
   
-@app.post("/login", response_model=TokenResponse) 
-def login(login_data: LoginRequest): 
-    username_is_valid = compare_digest(login_data.username, VALID_USERNAME) 
-    password_is_valid = compare_digest(login_data.password, VALID_PASSWORD) 
-  
-    if not username_is_valid or not password_is_valid: 
-        raise HTTPException( 
-            status_code=status.HTTP_401_UNAUTHORIZED, 
-            detail="Invalid username or password" 
-        ) 
-    return { 
-        "access_token": VALID_TOKEN, 
-        "token_type": "bearer" 
-    }
+@app.post("/login", response_model=TokenResponse)
+def login(login_data: LoginRequest):
+    # Check admin
+    if compare_digest(login_data.username, VALID_USERNAME) and compare_digest(login_data.password, VALID_PASSWORD):
+        return {"access_token": VALID_TOKEN, "token_type": "bearer", "role": "admin"}
     
+    # Check staff
+    if compare_digest(login_data.username, STAFF_USERNAME) and compare_digest(login_data.password, STAFF_PASSWORD):
+        return {"access_token": STAFF_TOKEN, "token_type": "bearer", "role": "staff"}
+    
+    # Neither matched
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid username or password"
+    )
   
 @app.get("/me") 
 def get_current_user(current_user: dict = Depends(verify_token)): 
@@ -137,28 +148,38 @@ Depends(verify_token)):
     } 
   
   
-@app.delete("/appointments/{appointment_id}") 
-def cancel_appointment(appointment_id: int, current_user: dict = Depends(verify_token)): 
-    if appointment_id not in appointments: 
-        raise HTTPException( 
-            status_code=status.HTTP_404_NOT_FOUND, 
-            detail="Appointment not found" 
-        ) 
-  
-    appointments[appointment_id]["status"] = "cancelled" 
-    appointments[appointment_id]["cancelled_by"] = current_user["username"] 
-  
-    return { 
-        "message": "Appointment cancelled successfully", 
-        "appointment": appointments[appointment_id] 
+@app.delete("/appointments/{appointment_id}")
+def cancel_appointment(
+    appointment_id: int,
+    current_user: dict = Depends(verify_token)
+):
+    if current_user["role"] != "clinic_staff":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only clinic staff may cancel appointments."
+        )
+
+    if appointment_id not in appointments:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Appointment not found"
+        )
+
+    appointments[appointment_id]["status"] = "cancelled"
+    appointments[appointment_id]["cancelled_by"] = current_user["username"]
+
+    return {
+        "message": "Appointment cancelled successfully",
+        "appointment": appointments[appointment_id]
     }
-        
-#CHALLENGE 1
+    
+    
+#CHALLENGE 1 lab 3
 @app.get("/health")
 def health_check():
     return {"status": "API is running"}
 
-#Challenge 2: Filter Appointments by Status
+#Challenge 2: Filter Appointments by Status lab 3
 @app.get("/appointments/status/{status}")
 def get_appointments_by_status(status: str):
     filtered = [
@@ -170,7 +191,7 @@ def get_appointments_by_status(status: str):
         "appointments": filtered
     }
 
-#Challenge 3: Filter Appointments by Doctor Name
+#Challenge 3: Filter Appointments by Doctor Name lab 3
 @app.get("/appointments/doctor/{doctor_name}")
 def get_appointments_by_doctor(doctor_name: str):
     filtered = [
